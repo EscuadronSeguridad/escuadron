@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "escuadron",
-    "slug": "snack-ecf0f040-3ae1-4fc9-a609-9c11e66f0d35",
+    "slug": "snack-ecf0f640-3ae1-4cf9-a609-9c11e66f0d35",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,9 +15,8 @@
     "ios": {
       "supportsTablet": true
     },
-      "android": {
+    "android": {
       "package": "com.escuadron.seguridad",
-      "adaptiveIcon": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -27,6 +26,14 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "description": "Apk"
+    "description": "App",
+    "plugins": [
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyA6X-5O9D1J9v2x8v3x4y5z6a7b8c9d0e1f2"
+        }
+      ]
+    ]
   }
 }
