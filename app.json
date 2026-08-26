@@ -15,7 +15,9 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
+      "android": {
+      "package": "com.escuadron.seguridad",
+      "adaptiveIcon": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
