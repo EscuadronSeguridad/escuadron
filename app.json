@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "escuadron",
-    "slug": "snack-ecf0f640-3ae1-4cf9-a609-9c11e66f0d35",
+    "slug": "escuadron",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,16 +21,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyA6X-5O9D1J9v2x8v3x4y5z6a7b8c9d0e1f2"
-        }
-      }
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "description": "App"
+    "platforms": ["ios", "android"]
   }
 }
