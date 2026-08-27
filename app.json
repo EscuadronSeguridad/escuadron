@@ -30,6 +30,13 @@
           "cameraPermission": "Permitir que Escuadron acceda a la cámara para escanear DNI."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3d7c3ad1-1be2-47ad-949c-eba7f78e1f9b"
+      }
+    },
+    "sdkVersion": "54.0.0",
+    "platforms": ["ios", "android"]
   }
 }
