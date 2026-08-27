@@ -1,179 +1,129 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, ScrollView, Vibration } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function App() {
-  const [rol, setRol] = useState(null);
   const [user, setUser] = useState(null);
-  const [eventos, setEventos] = useState([]);
-  const [eventoActivo, setEventoActivo] = useState(null);
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
+  const [tab, setTab] = useState('ESCANER');
+  const [listas, setListas] = useState({ roja: [], amarilla: [], verde: [] });
+  const [guardias, setGuardias] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [dni, setDni] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [edad, setEdad] = useState('');
+  const [resultado, setResultado] = useState(null);
+  const [scanMode, setScanMode] = useState(null);
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanning, setScanning] = useState(false);
-  const [dniManual, setDniManual] = useState('');
-  const [lastResult, setLastResult] = useState(null);
 
-  useEffect(() => { cargar(); }, []);
-  const cargar = async () => {
-    const e = await AsyncStorage.getItem('ESCUADRON_EVENTOS_V10');
-    if (e) setEventos(JSON.parse(e));
-    const r = await AsyncStorage.getItem('ESCUADRON_ROL');
-    const u = await AsyncStorage.getItem('ESCUADRON_USER');
-    if (r) { setRol(r); setUser(u); }
-  };
-  const guardarEventos = async (ev) => {
-    setEventos(ev);
-    await AsyncStorage.setItem('ESCUADRON_EVENTOS_V10', JSON.stringify(ev));
-  };
+  useEffect(() => {
+    (async () => {
+      const l = await AsyncStorage.getItem('listas');
+      const g = await AsyncStorage.getItem('guardias');
+      const lg = await AsyncStorage.getItem('logs');
+      if (l) setListas(JSON.parse(l));
+      if (g) setGuardias(JSON.parse(g));
+      if (lg) setLogs(JSON.parse(lg));
+    })();
+  }, []);
+  useEffect(() => { AsyncStorage.setItem('listas', JSON.stringify(listas)); }, [listas]);
+  useEffect(() => { AsyncStorage.setItem('guardias', JSON.stringify(guardias)); }, [guardias]);
+  useEffect(() => { AsyncStorage.setItem('logs', JSON.stringify(logs)); }, [logs]);
 
-  const login = async () => {
-    if (loginUser === 'escuadron' && loginPass === 'escuadron2025') {
-      setRol('super'); setUser('escuadron');
-      await AsyncStorage.setItem('ESCUADRON_ROL', 'super');
-      await AsyncStorage.setItem('ESCUADRON_USER', 'escuadron');
-    } else if (loginUser.startsWith('admin')) {
-      setRol('admin'); setUser(loginUser);
-      await AsyncStorage.setItem('ESCUADRON_ROL', 'admin');
-      await AsyncStorage.setItem('ESCUADRON_USER', loginUser);
-    } else if (loginUser.startsWith('garita')) {
-      if (!permission?.granted) await requestPermission();
-      setRol('guardia'); setUser(loginUser);
-      await AsyncStorage.setItem('ESCUADRON_ROL', 'guardia');
-      await AsyncStorage.setItem('ESCUADRON_USER', loginUser);
-    } else Alert.alert('Usuario no válido');
-  };
-
-  const calcularEdadDesdeBarcode = (data) => {
-    const match = data.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})|(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
-    if (!match) return null;
-    let dia, mes, anio;
-    if (match[3]) { dia = parseInt(match[1]); mes = parseInt(match[2]); anio = parseInt(match[3]); }
-    else { anio = parseInt(match[4]); mes = parseInt(match[5]); dia = parseInt(match[6]); }
-    const hoy = new Date();
-    let edad = hoy.getFullYear() - anio;
-    if (hoy.getMonth() + 1 < mes || (hoy.getMonth() + 1 === mes && hoy.getDate() < dia)) edad--;
-    return edad;
-  };
-
-  const extraerDNI = (data) => {
-    const m = data.match(/(\d{7,8})/);
-    return m? m[1] : data.replace(/\D/g, '').slice(-8);
-  };
-
-  const procesarEscaneo = (dni, edad) => {
-    if (!eventoActivo) { Alert.alert('Seleccioná un evento primero'); return; }
-    const evs = [...eventos];
-    const idx = evs.findIndex(x => x.id === eventoActivo.id);
-    const ev = evs[idx];
-    const nuevoScan = { dni, edad: edad || 'No disponible', hora: new Date().toLocaleTimeString(), garita: user, resultado: 'VERDE' };
-    if (edad!== null && edad!== undefined) {
-      if (edad < ev.minEdad || edad > ev.maxEdad) {
-        nuevoScan.resultado = 'MENOR/EDAD';
-        Vibration.vibrate([500, 200, 500]);
-        setLastResult({ dni, edad, estado: `⛔ NO PASA - FUERA DE RANGO (${ev.minEdad} a ${ev.maxEdad})`, color: '#ff0000' });
-        ev.scans.unshift(nuevoScan);
-        guardarEventos(evs); setEventoActivo(ev); return;
+  const login = () => {
+    if (loginUser === 'escuadron' && loginPass === 'Escuadron2026!') {
+      setUser({ rol: 'admin', nombre: 'ESCUADRON' }); return;
+    }
+    const g = guardias.find(x => x.usuario === loginUser && x.clave === loginPass);
+    if (g) {
+      const hora = new Date().getHours();
+      if (!(g.desde === 0 && g.hasta === 0) && (hora < g.desde || hora >= g.hasta)) {
+        Alert.alert('Fuera de horario', `Tu turno es de ${g.desde} a ${g.hasta}hs`); return;
       }
-    }
-    if (ev.roja.includes(dni)) {
-      nuevoScan.resultado = 'ROJA';
-      Vibration.vibrate([500, 200, 500]);
-      setLastResult({ dni, edad, estado: '⛔ NO PASA - LISTA ROJA', color: '#ff0000' });
-    } else {
-      Vibration.vibrate(100);
-      setLastResult({ dni, edad, estado: '✅ PUEDE PASAR', color: '#00c851' });
-    }
-    ev.scans.unshift(nuevoScan);
-    guardarEventos(evs); setEventoActivo(ev);
+      setUser({ rol: 'garita',...g }); setTab('ESCANER');
+    } else Alert.alert('Error', 'Usuario o clave incorrecta');
   };
 
-  if (!rol) {
+  const verificar = (dniBuscar) => {
+    const d = (dniBuscar || dni).trim(); if (!d) return;
+    const enRoja = listas.roja.find(x => x.dni === d);
+    const enAmarilla = listas.amarilla.find(x => x.dni === d);
+    let r = { dni: d, nombre: nombre || enRoja?.nombre || enAmarilla?.nombre || 'SIN NOMBRE', estado: 'VERDE - PASA', color: '#22c55e' };
+    if (enRoja) r = {...r, estado: 'ROJA - NO PASA', color: '#ef4444', motivo: enRoja.motivo };
+    else if (enAmarilla) r = {...r, estado: 'AMARILLA - PRECAUCIÓN', color: '#eab308', motivo: enAmarilla.motivo };
+    else if (edad && parseInt(edad) < 18) r = {...r, estado: 'MENOR - NO PASA', color: '#ef4444' };
+    setResultado(r);
+    setLogs(prev => [{...r, fecha: new Date().toLocaleString(), garita: user?.usuario || 'admin' },...prev]);
+  };
+
+  const handleBarCodeScanned = ({ data }) => {
+    setScanMode(null); let dniExtraido = ''; let nombreExtraido = '';
+    if (data.includes('@')) { const p = data.split('@'); if (p.length > 4) { nombreExtraido = `${p[1]} ${p[2]}`.trim(); dniExtraido = p[4].trim(); } }
+    else { const m = data.match(/\b\d{7,8}\b/); if (m) dniExtraido = m[0]; }
+    if (dniExtraido) { setDni(dniExtraido); if (nombreExtraido) setNombre(nombreExtraido); Alert.alert('DNI Escaneado', `DNI: ${dniExtraido}`, [{ text: 'VERIFICAR', onPress: () => verificar(dniExtraido) }]); }
+    else Alert.alert('No se pudo leer', 'Intentá manual');
+  };
+
+  if (!user) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#111' }}>
-        <Text style={{ color: 'white', fontSize: 28, fontWeight: 'bold', marginBottom: 5, textAlign: 'center' }}>ESCUADRON SEGURIDAD</Text>
-        <Text style={{ color: '#888', textAlign: 'center', marginBottom: 30 }}>Control de Acceso</Text>
-        <TextInput placeholder="Usuario: escuadron / admin1 / garita1" placeholderTextColor="#888" style={{ backgroundColor: 'white', padding: 15, marginBottom: 10, borderRadius: 10 }} value={loginUser} onChangeText={setLoginUser} />
-        <TextInput placeholder="Clave" placeholderTextColor="#888" secureTextEntry style={{ backgroundColor: 'white', padding: 15, marginBottom: 10, borderRadius: 10 }} value={loginPass} onChangeText={setLoginPass} />
-        <TouchableOpacity onPress={login} style={{ backgroundColor: '#00c851', padding: 15, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: 'white', fontWeight: 'bold' }}>ENTRAR</Text></TouchableOpacity>
+      <View style={styles.center}>
+        <Text style={styles.logo}>🛡️ ESCUADRON</Text>
+        <TextInput style={styles.input} placeholder="Usuario" value={loginUser} onChangeText={setLoginUser} autoCapitalize="none" />
+        <TextInput style={styles.input} placeholder="Clave" value={loginPass} onChangeText={setLoginPass} secureTextEntry />
+        <TouchableOpacity style={styles.btn} onPress={login}><Text style={styles.btnT}>ENTRAR</Text></TouchableOpacity>
       </View>
     );
   }
 
-  if (rol === 'guardia') {
-    if (!eventoActivo) {
-      return (
-        <View style={{ flex: 1, padding: 20, backgroundColor: '#111' }}>
-          <Text style={{ color: 'white', fontSize: 20, marginBottom: 20 }}>Hola {user}, elegí evento:</Text>
-          {eventos.map(ev => (
-            <TouchableOpacity key={ev.id} onPress={() => setEventoActivo(ev)} style={{ backgroundColor: 'white', padding: 20, borderRadius: 10, marginBottom: 10 }}>
-              <Text style={{ fontWeight: 'bold' }}>{ev.nombre}</Text>
-              <Text>Edad: {ev.minEdad} a {ev.maxEdad} - Rojas: {ev.roja.length}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      );
+  if (scanMode) {
+    if (!permission?.granted) {
+      return (<View style={styles.center}><Text>Permiso de cámara</Text><TouchableOpacity style={styles.btn} onPress={requestPermission}><Text style={styles.btnT}>DAR PERMISO</Text></TouchableOpacity><TouchableOpacity style={[styles.btn, { backgroundColor: '#666' }]} onPress={() => setScanMode(null)}><Text style={styles.btnT}>VOLVER</Text></TouchableOpacity></View>);
     }
-    return (
-      <View style={{ flex: 1, backgroundColor: '#111' }}>
-        {!scanning? (
-          <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
-            <Text style={{ color: 'white', textAlign: 'center', marginBottom: 10 }}>EVENTO: {eventoActivo.nombre} ({eventoActivo.minEdad}-{eventoActivo.maxEdad})</Text>
-            {lastResult && (
-              <View style={{ backgroundColor: lastResult.color, padding: 30, borderRadius: 20, marginBottom: 20 }}>
-                <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>{lastResult.estado}</Text>
-                <Text style={{ color: 'white', textAlign: 'center', marginTop: 10 }}>DNI: {lastResult.dni} - EDAD: {lastResult.edad}</Text>
-              </View>
-            )}
-            <TouchableOpacity onPress={() => setScanning(true)} style={{ backgroundColor: '#00c851', padding: 25, borderRadius: 15, alignItems: 'center', marginBottom: 15 }}>
-              <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>📷 ESCANEAR DNI</Text>
-            </TouchableOpacity>
-            <TextInput placeholder="O escribir DNI manual" keyboardType="numeric" value={dniManual} onChangeText={setDniManual} style={{ backgroundColor: 'white', padding: 15, borderRadius: 10 }} />
-            <TouchableOpacity onPress={() => { if (dniManual.length >= 7) { procesarEscaneo(dniManual, null); setDniManual(''); } }} style={{ backgroundColor: 'white', padding: 15, borderRadius: 10, marginTop: 10, alignItems: 'center' }}>
-              <Text>VERIFICAR MANUAL</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setEventoActivo(null)} style={{ marginTop: 20 }}><Text style={{ color: '#888', textAlign: 'center' }}>Cambiar evento</Text></TouchableOpacity>
-          </View>
-        ) : (
-          <CameraView style={{ flex: 1 }} barcodeScannerSettings={{ barcodeTypes: ['pdf417', 'qr'] }} onBarcodeScanned={({ data }) => {
-            setScanning(false);
-            const dni = extraerDNI(data);
-            const edad = calcularEdadDesdeBarcode(data);
-            procesarEscaneo(dni, edad);
-          }} />
-        )}
-      </View>
-    );
+    return (<View style={{ flex: 1 }}><CameraView style={{ flex: 1 }} onBarcodeScanned={handleBarCodeScanned} barcodeScannerSettings={{ barcodeTypes: ["qr", "pdf417"] }} /><View style={styles.scanOverlay}><TouchableOpacity style={styles.btn} onPress={() => setScanMode(null)}><Text style={styles.btnT}>CANCELAR</Text></TouchableOpacity></View></View>);
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#111', padding: 20 }}>
-      <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold' }}>PANEL {rol.toUpperCase()} - {user}</Text>
-      <TouchableOpacity onPress={async () => {
-        const nuevo = { id: Date.now().toString(), nombre: `Evento ${eventos.length + 1}`, minEdad: 18, maxEdad: 60, roja: [], amarilla: [], scans: [] };
-        guardarEventos([...eventos, nuevo]);
-      }} style={{ backgroundColor: '#00c851', padding: 15, borderRadius: 10, marginTop: 20 }}>
-        <Text style={{ color: 'white', textAlign: 'center', fontWeight: 'bold' }}>+ CREAR NUEVO EVENTO</Text>
-      </TouchableOpacity>
-      {eventos.map(ev => (
-        <View key={ev.id} style={{ backgroundColor: 'white', padding: 15, borderRadius: 10, marginTop: 15 }}>
-          <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{ev.nombre} ({ev.minEdad} a {ev.maxEdad})</Text>
-          <Text>Total escaneados: {ev.scans.length}</Text>
-          <FlatList data={ev.scans.slice(0, 15)} keyExtractor={(_, i) => i.toString()} renderItem={({ item }) => (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5, borderBottomWidth: 0.5, paddingBottom: 5 }}>
-              <Text>{item.hora} - {item.dni} - {item.edad}a</Text>
-              <TouchableOpacity onPress={() => {
-                const evs = [...eventos]; const idx = evs.findIndex(x => x.id === ev.id);
-                if (!evs[idx].roja.includes(item.dni)) evs[idx].roja.push(item.dni);
-                guardarEventos(evs);
-                Alert.alert('Pasado a Roja');
-              }}><Text style={{ color: 'red', fontWeight: 'bold' }}>+ A ROJA</Text></TouchableOpacity>
-            </View>
-          )} />
-        </View>
-      ))}
-      <TouchableOpacity onPress={async () => { await AsyncStorage.clear(); setRol(null); }} style={{ marginTop: 30, padding: 15 }}><Text style={{ color: 'red', textAlign: 'center' }}>Cerrar sesión</Text></TouchableOpacity>
-    </ScrollView>
+    <View style={styles.container}>
+      <View style={styles.header}><Text style={styles.headerT}>🛡️ {user.rol === 'admin'? 'ESCUADRON CENTRAL' : `GARITA ${user.usuario.toUpperCase()}`}</Text><TouchableOpacity onPress={() => setUser(null)}><Text style={{ color: '#fff' }}>Salir</Text></TouchableOpacity></View>
+      {user.rol === 'admin' && (<View style={styles.tabs}>{['ESCANER', 'LISTAS', 'GUARDIAS', 'REPORTES'].map(t => (<TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabA]} onPress={() => setTab(t)}><Text style={[styles.tabT, tab === t && { color: '#fff' }]}>{t}</Text></TouchableOpacity>))}</View>)}
+      <ScrollView style={styles.body}>
+        {(tab === 'ESCANER' || user.rol === 'garita') && (
+          <View>
+            <Text style={styles.title}>CONTROL DE INGRESO</Text>
+            <View style={styles.row}><TouchableOpacity style={[styles.scanBtn, { backgroundColor: '#2563eb' }]} onPress={() => setScanMode('FISICO')}><Text style={styles.btnT}>📷 FÍSICO</Text></TouchableOpacity><TouchableOpacity style={[styles.scanBtn, { backgroundColor: '#7c3aed' }]} onPress={() => setScanMode('DIGITAL')}><Text style={styles.btnT}>📱 DIGITAL</Text></TouchableOpacity></View>
+            <TextInput style={styles.input} placeholder="DNI" value={dni} onChangeText={setDni} keyboardType="numeric" />
+            <TextInput style={styles.input} placeholder="Nombre (opcional)" value={nombre} onChangeText={setNombre} />
+            <TextInput style={styles.input} placeholder="Edad (opcional)" value={edad} onChangeText={setEdad} keyboardType="numeric" />
+            <TouchableOpacity style={[styles.btn, { backgroundColor: '#000' }]} onPress={() => verificar()}><Text style={styles.btnT}>VERIFICAR</Text></TouchableOpacity>
+            {resultado && (<View style={[styles.result, { backgroundColor: resultado.color }]}><Text style={styles.resultT}>{resultado.estado}</Text><Text style={styles.resultD}>DNI: {resultado.dni} - {resultado.nombre}</Text>{resultado.motivo && <Text style={styles.resultD}>{resultado.motivo}</Text>}</View>)}
+            {user.rol === 'garita' && (<View style={{ marginTop: 20 }}><Text style={styles.title}>📥 IMPORTAR LISTA PARA TRABAJAR</Text><ImportarBox setListas={setListas} /></View>)}
+          </View>
+        )}
+        {user.rol === 'admin' && tab === 'LISTAS' && <ListasView listas={listas} setListas={setListas} />}
+        {user.rol === 'admin' && tab === 'GUARDIAS' && <GuardiasView guardias={guardias} setGuardias={setGuardias} />}
+        {user.rol === 'admin' && tab === 'REPORTES' && <ReportesView logs={logs} />}
+      </ScrollView>
+    </View>
   );
 }
+function ListasView({ listas, setListas }) {
+  const [tipo, setTipo] = useState('roja'); const [dni, setDni] = useState(''); const [nombre, setNombre] = useState(''); const [motivo, setMotivo] = useState('');
+  const agregar = () => { if (!dni) return; setListas(prev => ({...prev, [tipo]: [...prev[tipo], { dni, nombre, motivo }] })); setDni(''); setNombre(''); setMotivo(''); };
+  const exportar = () => { const txt = `ESCUADRON_LISTA:${JSON.stringify(listas)}`; Alert.alert('COPIÁ ESTO Y ENVIALO POR WHATSAPP', txt); };
+  return (<View><Text style={styles.title}>GESTIÓN DE LISTAS</Text><View style={styles.tabs}>{['roja', 'amarilla', 'verde'].map(t => (<TouchableOpacity key={t} style={[styles.tab, tipo === t && styles.tabA]} onPress={() => setTipo(t)}><Text style={[styles.tabT, tipo === t && { color: '#fff' }]}>{t.toUpperCase()}</Text></TouchableOpacity>))}</View><TextInput style={styles.input} placeholder="DNI" value={dni} onChangeText={setDni} keyboardType="numeric" /><TextInput style={styles.input} placeholder="Nombre" value={nombre} onChangeText={setNombre} /><TextInput style={styles.input} placeholder="Motivo" value={motivo} onChangeText={setMotivo} /><TouchableOpacity style={styles.btn} onPress={agregar}><Text style={styles.btnT}>AGREGAR A {tipo.toUpperCase()}</Text></TouchableOpacity>{listas[tipo].map((item, i) => (<View key={i} style={styles.item}><Text>{item.dni} - {item.nombre}</Text><TouchableOpacity onPress={() => setListas(prev => ({...prev, [tipo]: prev[tipo].filter((_, idx) => idx!== i) }))}><Text style={{ color: 'red' }}>X</Text></TouchableOpacity></View>))}<TouchableOpacity style={[styles.btn, { backgroundColor: '#16a34a', marginTop: 20 }]} onPress={exportar}><Text style={styles.btnT}>📤 EXPORTAR LISTA PARA ENVIAR A GARITA</Text></TouchableOpacity></View>);
+}
+function GuardiasView({ guardias, setGuardias }) {
+  const [u, setU] = useState(''); const [c, setC] = useState(''); const [d, setD] = useState(''); const [h, setH] = useState('');
+  const agregar = () => { if (!u ||!c) return; setGuardias(prev => [...prev, { usuario: u, clave: c, desde: parseInt(d) || 0, hasta: parseInt(h) || 0 }]); setU(''); setC(''); setD(''); setH(''); };
+  return (<View><Text style={styles.title}>GUARDIAS (0 a 0 = 24hs)</Text><TextInput style={styles.input} placeholder="Usuario garita ej: garita1" value={u} onChangeText={setU} autoCapitalize="none" /><TextInput style={styles.input} placeholder="Clave ej: 1234" value={c} onChangeText={setC} /><View style={styles.row}><TextInput style={[styles.input, { flex: 1 }]} placeholder="Desde ej: 22" value={d} onChangeText={setD} keyboardType="numeric" /><TextInput style={[styles.input, { flex: 1 }]} placeholder="Hasta ej: 6" value={h} onChangeText={setH} keyboardType="numeric" /></View><TouchableOpacity style={styles.btn} onPress={agregar}><Text style={styles.btnT}>CREAR GARITA</Text></TouchableOpacity>{guardias.map((g, i) => (<View key={i} style={styles.item}><Text>{g.usuario} - {g.desde} a {g.hasta} {g.desde === 0 && g.hasta === 0? '(24hs)' : ''}</Text><TouchableOpacity onPress={() => setGuardias(prev => prev.filter((_, idx) => idx!== i))}><Text style={{ color: 'red' }}>X</Text></TouchableOpacity></View>))}</View>);
+}
+function ImportarBox({ setListas }) {
+  const [txt, setTxt] = useState('');
+  return (<View><TextInput style={[styles.input, { height: 100 }]} placeholder="Pegá acá ESCUADRON_LISTA:..." value={txt} onChangeText={setTxt} multiline /><TouchableOpacity style={styles.btn} onPress={() => { try { const json = txt.replace('ESCUADRON_LISTA:', ''); setListas(JSON.parse(json)); Alert.alert('Lista importada', 'Ya podés trabajar offline'); } catch { Alert.alert('Error', 'Texto inválido'); } }}><Text style={styles.btnT}>IMPORTAR AHORA</Text></TouchableOpacity></View>);
+}
+function ReportesView({ logs }) { return (<View><Text style={styles.title}>REPORTES</Text>{logs.map((l, i) => (<View key={i} style={[styles.item, { borderLeftWidth: 5, borderLeftColor: l.color }]}><Text style={{ fontWeight: 'bold' }}>{l.estado} - {l.dni}</Text><Text>{l.nombre} - {l.fecha} - {l.garita}</Text></View>))}</View>); }
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f5f5f5' }, center: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' }, logo: { fontSize: 32, fontWeight: 'bold', textAlign: 'center', marginBottom: 30 }, input: { borderWidth: 1, borderColor: '#ccc', padding: 12, borderRadius: 8, marginBottom: 10, backgroundColor: '#fff' }, btn: { backgroundColor: '#111', padding: 15, borderRadius: 8, alignItems: 'center', marginBottom: 10 }, btnT: { color: '#fff', fontWeight: 'bold' }, header: { backgroundColor: '#111', padding: 15, paddingTop: 50, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, headerT: { color: '#fff', fontWeight: 'bold' }, tabs: { flexDirection: 'row', backgroundColor: '#fff', padding: 5 }, tab: { flex: 1, padding: 10, alignItems: 'center', borderRadius: 6 }, tabA: { backgroundColor: '#111' }, tabT: { fontWeight: 'bold', fontSize: 12 }, body: { flex: 1, padding: 15 }, title: { fontWeight: 'bold', fontSize: 16, marginBottom: 15 }, row: { flexDirection: 'row', gap: 10 }, scanBtn: { flex: 1, padding: 15, borderRadius: 8, alignItems: 'center', marginBottom: 10 }, result: { padding: 20, borderRadius: 12, marginTop: 15 }, resultT: { color: '#fff', fontWeight: 'bold', fontSize: 18, textAlign: 'center' }, resultD: { color: '#fff', textAlign: 'center', marginTop: 5 }, item: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between' }, scanOverlay: { position: 'absolute', bottom: 40, left: 20, right: 20 }
+});
