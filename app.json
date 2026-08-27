@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "escuadron",
+    "name": "Escuadron",
     "slug": "escuadron",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,16 +21,15 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "permissions": ["android.permission.CAMERA"]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "d45f56fd-2230-4fb5-b888-d2ab6efaf688"
-      }
-    },
-    "platforms": ["ios", "android"]
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir que Escuadron acceda a la cámara para escanear DNI."
+        }
+      ]
+    ]
   }
 }
